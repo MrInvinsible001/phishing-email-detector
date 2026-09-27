@@ -1,18 +1,23 @@
 import pandas as pd
+import joblib
+
 from sklearn.model_selection import train_test_split
+from sklearn.pipeline import FeatureUnion, Pipeline
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, classification_report
 
+
 # Load dataset
 df = pd.read_csv("data/phishing_email_subset.csv")
 
-# Remove rows with missing values
+# Remove missing values
 df = df.dropna(subset=["text", "label"])
 
-# Inputs and answers
+# Inputs and labels
 X = df["text"]
 y = df["label"]
+
 
 # Split dataset
 X_train, X_test, y_train, y_test = train_test_split(
@@ -23,80 +28,66 @@ X_train, X_test, y_train, y_test = train_test_split(
     stratify=y
 )
 
-# Convert email text into numbers
-from scipy.sparse import hstack
 
-# Word-level TF-IDF
-word_vectorizer = TfidfVectorizer(
-    ngram_range=(1, 2),
-    min_df=2
-)
-
-X_train_word = word_vectorizer.fit_transform(X_train)
-X_test_word = word_vectorizer.transform(X_test)
-
-
-# Character-level TF-IDF
-char_vectorizer = TfidfVectorizer(
-    analyzer="char",
-    ngram_range=(3, 5),
-    min_df=2
-)
-
-X_train_char = char_vectorizer.fit_transform(X_train)
-X_test_char = char_vectorizer.transform(X_test)
-
-
-# Combine word + character features
-X_train_tfidf = hstack([
-    X_train_word,
-    X_train_char
+# Word + character TF-IDF
+features = FeatureUnion([
+    (
+        "word",
+        TfidfVectorizer(
+            ngram_range=(1, 2),
+            min_df=2
+        )
+    ),
+    (
+        "char",
+        TfidfVectorizer(
+            analyzer="char",
+            ngram_range=(3, 5),
+            min_df=2
+        )
+    )
 ])
 
-X_test_tfidf = hstack([
-    X_test_word,
-    X_test_char
+
+# Complete pipeline
+model = Pipeline([
+    ("features", features),
+    ("classifier", LogisticRegression(max_iter=1000))
 ])
 
-print("Training emails:", len(X_train))
-print("Testing emails:", len(X_test))
-print("Training data shape:", X_train_tfidf.shape)
-print("Testing data shape:", X_test_tfidf.shape)
-
-# Create model
-model = LogisticRegression(max_iter=1000)
 
 # Train
-model.fit(X_train_tfidf, y_train)
+model.fit(X_train, y_train)
+
 
 # Predict
-predictions = model.predict(X_test_tfidf)
+predictions = model.predict(X_test)
+
 
 # Evaluate
 accuracy = accuracy_score(y_test, predictions)
 
+print("V5: Word + Character TF-IDF")
+print()
+
+print("Training emails:", len(X_train))
+print("Testing emails:", len(X_test))
+
 print("\nAccuracy:", accuracy)
 
 print("\nClassification report:")
-print(classification_report(y_test, predictions))
-results = pd.DataFrame({
-    "text": X_test,
-    "actual": y_test,
-    "predicted": predictions
-})
+print(
+    classification_report(
+        y_test,
+        predictions,
+        target_names=["SAFE", "PHISHING"]
+    )
+)
 
-false_positives = results[
-    (results["actual"] == 0) & (results["predicted"] == 1)
-]
 
-false_negatives = results[
-    (results["actual"] == 1) & (results["predicted"] == 0)
-]
+# Save trained pipeline
+model_path = "models/phishing_email_model.joblib"
 
-print("\n========== FALSE POSITIVES ==========")
-for _, row in false_positives.head(5).iterrows():
-    print("\n", row["text"][:700].replace("\n", " "))
+joblib.dump(model, model_path)
 
-print("\n========== FALSE NEGATIVES ==========")
-for _, row in false_negatives.head(5).iterrows():
-    print("\n", row["text"][:700].replace("\n", " "))
+print("Model saved to:", model_path)
