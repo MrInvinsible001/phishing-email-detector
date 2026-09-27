@@ -1,6 +1,6 @@
 import pandas as pd
 import joblib
-
+from pathlib import Path
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import FeatureUnion, Pipeline
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -84,7 +84,7 @@ print(
     )
 )
 
-
+Path("models").mkdir(exist_ok=True)
 # Save trained pipeline
 model_path = "models/phishing_email_model.joblib"
 

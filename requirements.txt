@@ -1,6 +1,4 @@
-@'
 pandas
 scikit-learn
 scipy
 joblib
-'@ | Set-Content requirements.txt -Encoding utf8
